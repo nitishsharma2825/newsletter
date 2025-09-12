@@ -81,7 +81,7 @@ fn spawn_app() -> String {
     // retrieve the port assigned by the OS
     let port = listner.local_addr().unwrap().port();
 
-    let server = newsletter::run(listner).expect("Failed to bind address");
+    let server = newsletter::startup::run(listner).expect("Failed to bind address");
 
     // launch the server as a background task
     let _ = tokio::spawn(server);
