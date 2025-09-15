@@ -15,7 +15,7 @@ path = "src/lib.rs"
 # have a look at the workspace feature- we'll cover it later on.
 [[bin]]
 path = "src/main.rs"
-name = "zero2prod"
+name = "newsletter"
 
 [dependencies]
 actix-web = "4"
@@ -24,6 +24,8 @@ serde = { version = "1", features = ["derive"] }
 config = "0.15"
 uuid = { version = "1.18.1", features = ["v4"] }
 chrono = "0.4.15"
+log = "0.4"
+env_logger = "0.11.8"
 
 [dependencies.sqlx]
 version = "0.8"
