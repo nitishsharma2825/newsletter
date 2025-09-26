@@ -1,0 +1,4 @@
+To check traces
+1. Compile with RUST_LOG=trace cargo run
+2. curl -i -X POST -d 'email=nitish10@gmail.com&name=Nitish4' http://127.0.0.1:8000/subscriptions
+3. check console logs
