@@ -5,3 +5,7 @@ To check traces
 
 To check test logs:
 TEST_LOG=true cargo test health_check_works
+
+Run docker container:
+    docker build -t newsletter -f ./Dockerfile .
+    docker run -p 8000:8000 newsletter
