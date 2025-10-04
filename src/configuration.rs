@@ -25,14 +25,21 @@ impl DatabaseSettings {
     pub fn connection_string(&self) -> Secret<String> {
         Secret::new(format!(
             "postgres://{}:{}@{}:{}/{}",
-            self.username, self.password.expose_secret(), self.host, self.port, self.database_name
+            self.username,
+            self.password.expose_secret(),
+            self.host,
+            self.port,
+            self.database_name
         ))
     }
 
     pub fn connection_string_without_db(&self) -> Secret<String> {
         Secret::new(format!(
             "postgres://{}:{}@{}:{}",
-            self.username, self.password.expose_secret(), self.host, self.port
+            self.username,
+            self.password.expose_secret(),
+            self.host,
+            self.port
         ))
     }
 }
@@ -42,15 +49,17 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
     let configuration_directory = base_path.join("configuration");
 
     // detect the running environment
-    let environment: String = std::env::var("APP_ENVIRONMENT")
+    let environment: Environment = std::env::var("APP_ENVIRONMENT")
         .unwrap_or_else(|_| "local".into())
-        .try_into()
+        .try_into() // convert from string to our custom type
         .expect("Failed to parse APP_ENVIRONMENT.");
 
     // read the default configuration file
     let settings = config::Config::builder()
         .add_source(config::File::from(configuration_directory.join("base")).required(true))
-        .add_source(config::File::from(configuration_directory.join(environment.as_str())).required(true))
+        .add_source(
+            config::File::from(configuration_directory.join(environment.as_str())).required(true),
+        )
         .build()?;
 
     settings.try_deserialize::<Settings>()

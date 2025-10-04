@@ -1,10 +1,10 @@
-use std::net::TcpListener;
 use newsletter::configuration::{DatabaseSettings, get_configuration};
 use newsletter::startup::run;
 use newsletter::telemetry::{get_subscriber, init_subscriber};
 use once_cell::sync::Lazy;
 use secrecy::ExposeSecret;
 use sqlx::{Executor, PgPool};
+use std::net::TcpListener;
 use uuid::Uuid;
 
 // Ensure that the `tracing` stack is only initialized once using `once_cell`
