@@ -46,3 +46,6 @@ The managed identity assigned to container app has permissions to pull image fro
 
 The github actions require credenditals to authenticate with Azure: Create a secret in github with JSON output of this command
 az ad sp create-for-rbac --name newsletter-app-creds --role contributor --scopes /subscriptions/<sub>/resourceGroups/<rg> --json-auth --output json
+
+# Grant AcrPush role to your service principal [Needed to push docker image to ACR]
+az role assignment create --assignee <service-principal-id> --scope /subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.ContainerRegistry/registries/<registry-name> --role AcrPush

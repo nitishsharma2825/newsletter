@@ -28,6 +28,11 @@ jobs:
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+      # this will login using the above creds, else need an explicit acr logic action with username and password
+      # Only works if your Service Principal (used in AZURE_CREDENTIALS) has AcrPush
+      - name: Log in to ACR
+        run: az acr login --name ${{ env.REGISTRY_NAME }}
 
       - name: Build and push image to ACR
         uses: docker/build-push-action@v4
