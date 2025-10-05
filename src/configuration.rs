@@ -57,13 +57,24 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
         .try_into() // convert from string to our custom type
         .expect("Failed to parse APP_ENVIRONMENT.");
 
+    //// Print environment variables for debugging
+    // for (key, value) in std::env::vars() {
+    //     if key.starts_with("APP_") {
+    //         println!("Found env var: {}={}", key, value);
+    //     }
+    // }
+
     // read the default configuration file
     let settings = config::Config::builder()
         .add_source(config::File::from(configuration_directory.join("base")).required(true))
         .add_source(
             config::File::from(configuration_directory.join(environment.as_str())).required(true),
         )
-        .add_source(config::Environment::with_prefix("app").separator("__")) // Add in settings from env variables, E.g.`APP_APPLICATION__PORT=5001 would set`Settings.application.port`
+        .add_source(
+            config::Environment::with_prefix("app")
+                .separator("__")
+                .prefix_separator("_"),
+        ) // Add in settings from env variables, E.g.`APP_APPLICATION__PORT=5001 would set`Settings.application.port`
         .build()?;
 
     settings.try_deserialize::<Settings>()

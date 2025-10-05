@@ -12,3 +12,37 @@ Run: cargo sqlx prepare --workspace -- --all-targets
 Run docker container:
     docker build -t newsletter -f ./Dockerfile .
     docker run -p 8000:8000 newsletter
+
+Deployment flow: [Manual]
+Creating resources in Azure:
+az group create --name <rg> --location eastus2 --output none
+az identity create --name <identity-name> --resource-group <rg> --output none
+az containerapp env create --name <environment-name> --resource-group <rg> --location eastus2 --mi-user-assigned <identity> --output none
+az acr create --resource-group <rg> --name <acr> --sku Basic --output none
+az acr identity assign --identities <identity_id> --name <acr-name> --resource-group <rg> --output none
+
+Building and pushing the local image to ACR:
+az acr build -t <arc-name>".azurecr.io/"newsletter":0.1" -r <arc-name> .
+OR
+az acr login --name myregistry123
+docker tag newsletter:latest myregistry123.azurecr.io/newsletter:latest
+docker push myregistry123.azurecr.io/newsletter:latest
+
+Deploying to container app using the ACR image:
+az containerapp create --name newsletter-app --resource-group <rg> --environment nitishsharma-saas --image <acr-name>".azurecr.io/"newsletter":0.1" --target-port 8000 --ingress external --user-assigned <identity> --registry-identity <identity> --registry-server <acr-name>.azurecr.io --query properties.configuration.ingress.fqdn
+
+After the app has launched, configure the environment variable to inject database connection details.
+
+Remote PG details:
+psql -h nitishpgdev.postgres.database.azure.com -p 5432 -U nitish postgres
+
+Create the schema on the remote PG server:
+DATABASE_URL=postgres://<user>:<pass>@<host>.postgres.database.azure.com:5432/newsletter?sslmode=require sqlx migrate run
+
+Create a subscription:
+curl --request POST --data 'name=le%20guin&email=ursula_le_guin%40gmail.com' https://<container-app-web-name>/subscriptions --verbose
+
+The managed identity assigned to container app has permissions to pull image from ACR.
+
+The github actions require credenditals to authenticate with Azure: Create a secret in github with JSON output of this command
+az ad sp create-for-rbac --name newsletter-app-creds --role contributor --scopes /subscriptions/<sub>/resourceGroups/<rg> --json-auth --output json
