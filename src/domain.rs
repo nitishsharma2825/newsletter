@@ -8,10 +8,6 @@ pub struct NewSubscriber {
 pub struct SubscriberName(String); // private field
 
 impl SubscriberName {
-    pub fn inner_ref(&self) -> &str {
-        &self.0
-    }
-
     // singleton to build a SubscriberName outside of this module
     pub fn parse(s: String) -> SubscriberName {
         let is_empty_or_whitespace = s.trim().is_empty();
@@ -24,5 +20,11 @@ impl SubscriberName {
         }
 
         Self(s)
+    }
+}
+
+impl AsRef<str> for SubscriberName {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
