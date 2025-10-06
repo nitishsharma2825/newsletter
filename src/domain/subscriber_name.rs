@@ -1,10 +1,5 @@
 use unicode_segmentation::UnicodeSegmentation;
 
-pub struct NewSubscriber {
-    pub email: String,
-    pub name: SubscriberName,
-}
-
 #[derive(Debug)]
 pub struct SubscriberName(String); // private field
 
@@ -73,5 +68,4 @@ mod tests {
         let name = "nitish".to_string();
         assert_ok!(SubscriberName::parse(name));
     }
-
 }
