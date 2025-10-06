@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
   # Or trigger after CI workflow completes on main branch
   workflow_run:
-    workflows: ["Rust"]  # Name of your CI workflow
+    workflows: ["newsletter-CI"]  # Name of your CI workflow
     branches: [main]
     types:
       - completed
