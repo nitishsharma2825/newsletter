@@ -1,5 +1,6 @@
 Implementation Notes:
 1. Currently services like subscription is tied to postgres as storage. Instead we can use a repository here and switch implementations.
+2. Add Application_base_url as environmet variable in prod deployment
 
 To check traces
 1. Compile with RUST_LOG=trace cargo run
