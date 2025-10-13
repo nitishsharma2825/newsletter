@@ -178,9 +178,25 @@ fn generate_subscription_token() -> String {
         .collect()
 }
 
-#[derive(Debug)]
+// an error type for store token operation
 pub struct StoreTokenError(sqlx::Error);
 
+// requires debug + display for a type to be Error
+impl std::error::Error for StoreTokenError {
+    // provides source to identify the root cause of the error
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.0)
+    }
+}
+
+// programmer friendly representation for the underlying type to debug
+impl std::fmt::Debug for StoreTokenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        error_chain_fmt(self, f)
+    }
+}
+
+// user facing representation
 impl std::fmt::Display for StoreTokenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -191,3 +207,16 @@ impl std::fmt::Display for StoreTokenError {
 }
 
 impl ResponseError for StoreTokenError {}
+
+fn error_chain_fmt(
+    e: &impl std::error::Error,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
+    writeln!(f, "{}\n", e)?;
+    let mut current = e.source();
+    while let Some(cause) = current {
+        writeln!(f, "Caused by:\n\t{}", cause)?;
+        current = cause.source();
+    }
+    Ok(())
+}
