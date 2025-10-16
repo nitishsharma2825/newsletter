@@ -37,6 +37,7 @@ validator = "0.2"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 rand = { version = "0.8", features=["std_rng"] }
 thiserror = "1"
+anyhow = "1"
 
 [dependencies.sqlx]
 version = "0.8"
