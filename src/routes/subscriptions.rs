@@ -131,11 +131,7 @@ pub async fn insert_subscriber(
         Utc::now(),
     )
     .execute(&mut **transaction) // reference to PgConnection or take ownership of transaction here and pass it back
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to execute query: {:?}", e);
-        e
-    })?;
+    .await?;
     Ok(subscriber_id)
 }
 
