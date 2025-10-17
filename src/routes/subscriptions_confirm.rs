@@ -1,4 +1,5 @@
-use actix_web::{HttpResponse, web};
+use actix_web::{HttpResponse, ResponseError, http::StatusCode, web};
+use anyhow::Context;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -8,24 +9,22 @@ pub struct Parameters {
 }
 
 #[tracing::instrument(name = "Confirm a pending subscriber", skip(parameters, pool))]
-pub async fn confirm(parameters: web::Query<Parameters>, pool: web::Data<PgPool>) -> HttpResponse {
+pub async fn confirm(
+    parameters: web::Query<Parameters>,
+    pool: web::Data<PgPool>,
+) -> Result<HttpResponse, SubscribeConfirmError> {
     // get subscriber_id using token from the database
-    let id = match get_subscriber_id_from_token(&pool, &parameters.subscription_token).await {
-        Ok(id) => id,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
+    let subscriber_id = get_subscriber_id_from_token(&pool, &parameters.subscription_token)
+        .await
+        .context("Failed to get subscriber id associated with the provided token.")? // context also does the work of map_err + add additional info
+        .ok_or(SubscribeConfirmError::SubscribeTokenError)?;
 
-    match id {
-        // Non-existing token
-        None => HttpResponse::Unauthorized().finish(),
-        Some(subscriber_id) => {
-            // mark status as confirmed in subscriptions table for this subscriber id
-            if confirm_subscriber(&pool, subscriber_id).await.is_err() {
-                return HttpResponse::InternalServerError().finish();
-            }
-            HttpResponse::Ok().finish()
-        }
-    }
+    // mark status as confirmed in subscriptions table for this subscriber id
+    confirm_subscriber(&pool, subscriber_id)
+        .await
+        .context("Failed to update subscription status to succeeded.")?;
+
+    Ok(HttpResponse::Ok().finish())
 }
 
 #[tracing::instrument(name = "Get subscriber_id from token", skip(subscription_token, pool))]
@@ -40,11 +39,7 @@ pub async fn get_subscriber_id_from_token(
         subscription_token,
     )
     .fetch_optional(pool)
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to execute query: {:?}", e);
-        e
-    })?;
+    .await?;
 
     // maps Option<Record> -> Option<Uuid>
     Ok(result.map(|r| r.subscriber_id))
@@ -59,11 +54,43 @@ pub async fn confirm_subscriber(pool: &PgPool, subscriber_id: Uuid) -> Result<()
         subscriber_id,
     )
     .execute(pool)
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to execute query: {:?}", e);
-        e
-    })?;
+    .await?;
 
     Ok(())
+}
+
+#[derive(thiserror::Error)]
+pub enum SubscribeConfirmError {
+    #[error("There is no subscriber associated with the provided token.")]
+    SubscribeTokenError,
+    #[error(transparent)]
+    UnexpectedError(#[from] anyhow::Error),
+}
+
+fn error_chain_fmt(
+    e: &impl std::error::Error,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
+    writeln!(f, "{}\n", e)?;
+    let mut current = e.source();
+    while let Some(cause) = current {
+        writeln!(f, "Caused by:\n\t{}", cause)?;
+        current = cause.source();
+    }
+    Ok(())
+}
+
+impl std::fmt::Debug for SubscribeConfirmError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        error_chain_fmt(self, f)
+    }
+}
+
+impl ResponseError for SubscribeConfirmError {
+    fn status_code(&self) -> actix_web::http::StatusCode {
+        match self {
+            SubscribeConfirmError::SubscribeTokenError => StatusCode::UNAUTHORIZED,
+            SubscribeConfirmError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
 }

@@ -73,3 +73,42 @@ async fn clicking_on_the_confirmation_link_confirms_a_subscriber() {
     assert_eq!(saved.name, "le guin");
     assert_eq!(saved.status, "confirmed");
 }
+
+#[tokio::test]
+async fn clicking_on_the_confirmation_link_returns_unathorized_if_token_not_found() {
+    let app = spawn_app().await;
+    let response = reqwest::get(format!(
+        "{}/subscriptions/confirm?subscription_token=jlvZsAa3O5GvG6uJunnT1To0Z",
+        app.address
+    ))
+    .await
+    .expect("Failed to execute request.");
+
+    assert_eq!(response.status().as_u16(), 401);
+}
+
+#[tokio::test]
+async fn clicking_on_the_confirmation_link_fails_if_database_error() {
+    let app = spawn_app().await;
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&app.email_server)
+        .await;
+
+    app.post_subscriptions(body.into()).await;
+    let email_request = &app.email_server.received_requests().await.unwrap()[0];
+    let confirmation_links = app.get_confirmation_links(&email_request);
+
+    // sabotage the db
+    sqlx::query!("ALTER TABLE subscription_tokens DROP COLUMN subscription_token;",)
+        .execute(&app.db_pool)
+        .await
+        .unwrap();
+
+    let response = reqwest::get(confirmation_links.html).await.unwrap();
+
+    assert_eq!(response.status().as_u16(), 500);
+}
