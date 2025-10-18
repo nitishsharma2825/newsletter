@@ -3,6 +3,8 @@ use anyhow::Context;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::routes::error_chain_fmt;
+
 #[derive(serde::Deserialize)]
 pub struct Parameters {
     subscription_token: String,
@@ -65,19 +67,6 @@ pub enum SubscribeConfirmError {
     SubscribeTokenError,
     #[error(transparent)]
     UnexpectedError(#[from] anyhow::Error),
-}
-
-fn error_chain_fmt(
-    e: &impl std::error::Error,
-    f: &mut std::fmt::Formatter<'_>,
-) -> std::fmt::Result {
-    writeln!(f, "{}\n", e)?;
-    let mut current = e.source();
-    while let Some(cause) = current {
-        writeln!(f, "Caused by:\n\t{}", cause)?;
-        current = cause.source();
-    }
-    Ok(())
 }
 
 impl std::fmt::Debug for SubscribeConfirmError {
