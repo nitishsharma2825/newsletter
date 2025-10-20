@@ -2,6 +2,12 @@ Implementation Notes:
 1. Currently services like subscription is tied to postgres as storage. Instead we can use a repository here and switch implementations.
 2. Add Application_base_url as environmet variable in prod deployment
 
+Some Common Problems:
+1. Authentication/Authorization. Who can call an API
+2. Retry/idempotency as an API
+3. Fault Tolerance: Feature keep working even on some independent failures
+4. Performance: batching of expensive operations?
+
 To check traces
 1. Compile with RUST_LOG=trace cargo run
 2. curl -i -X POST -d 'email=nitish10@gmail.com&name=Nitish4' http://127.0.0.1:8000/subscriptions
