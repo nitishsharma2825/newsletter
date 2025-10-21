@@ -12,6 +12,7 @@ use base64::{Engine, engine::general_purpose};
 use secrecy::{ExposeSecret, Secret};
 use sqlx::PgPool;
 
+use crate::telemetry::spawn_blocking_with_tracing;
 use crate::{domain::SubscriberEmail, email_client::EmailClient, routes::error_chain_fmt};
 
 #[derive(serde::Deserialize)]
@@ -46,7 +47,7 @@ pub async fn publish_newsletters(
     let credentials = basic_authentication(request.headers()).map_err(PublishError::AuthError)?;
 
     // check if user is authorized
-    let user_id = validate_credentials(credentials, &pool).await?;
+    let _user_id = validate_credentials(credentials, &pool).await?;
 
     // get all confirmed subscribers email from the database
     let subscribers = get_confirmed_subscribers(&pool).await?;
@@ -139,47 +140,69 @@ fn basic_authentication(headers: &HeaderMap) -> Result<Credentials, anyhow::Erro
     })
 }
 
+#[tracing::instrument(name = "Validate credentials", skip(credentials, pool))]
 async fn validate_credentials(
     credentials: Credentials,
     pool: &PgPool,
 ) -> Result<uuid::Uuid, PublishError> {
+    let (user_id, expected_password_hash) = get_stored_credentials(&credentials.username, &pool)
+        .await
+        .map_err(PublishError::UnexpectedError)?
+        .ok_or_else(|| PublishError::AuthError(anyhow::anyhow!("Unknown usernam.")))?;
+
+    // move compute intensive task to separate thread to unblock the async executor
+    spawn_blocking_with_tracing(move || {
+        verify_password_hash(expected_password_hash, credentials.password)
+    })
+    .await
+    .context("Failed to spawn blocking task.")
+    .map_err(PublishError::UnexpectedError)??;
+
+    Ok(user_id)
+}
+
+#[tracing::instrument(name = "Get stored credentials", skip(username, pool))]
+async fn get_stored_credentials(
+    username: &str,
+    pool: &PgPool,
+) -> Result<Option<(uuid::Uuid, Secret<String>)>, anyhow::Error> {
     // Get stored PHC password for the user
     let row = sqlx::query!(
         r#"
         SELECT user_id, password_hash
         FROM users WHERE username = $1
         "#,
-        credentials.username,
+        username,
     )
     .fetch_optional(pool)
     .await
-    .context("Failed to perform a query to retrieve stored credentials.")
-    .map_err(PublishError::UnexpectedError)?;
+    .context("Failed to perform a query to retrieve stored credentials.")?
+    .map(|row| (row.user_id, Secret::new(row.password_hash)));
 
-    let (expected_password_hash, user_id) = match row {
-        Some(row) => (row.password_hash, row.user_id),
-        None => {
-            return Err(PublishError::AuthError(anyhow::anyhow!(
-                "Unknown username."
-            )));
-        }
-    };
+    Ok(row)
+}
 
-    let expected_password_hash = PasswordHash::new(&expected_password_hash).map_err(|_| {
-        PublishError::UnexpectedError(anyhow::anyhow!(
-            "Failed to parse hash in PHC string format."
-        ))
-    })?;
+#[tracing::instrument(
+    name = "Verify password hash",
+    skip(expected_password_hash, password_candidate)
+)]
+fn verify_password_hash(
+    expected_password_hash: Secret<String>,
+    password_candidate: Secret<String>,
+) -> Result<(), PublishError> {
+    let expected_password_hash = PasswordHash::new(expected_password_hash.expose_secret())
+        .map_err(|_| {
+            PublishError::UnexpectedError(anyhow::anyhow!(
+                "Failed to parse hash in PHC string format."
+            ))
+        })?;
 
-    // auto verifies load params and salt used to verify password, we don't have to store salt and other load params for argon2
     Argon2::default()
         .verify_password(
-            credentials.password.expose_secret().as_bytes(),
+            password_candidate.expose_secret().as_bytes(),
             &expected_password_hash,
         )
-        .map_err(|_| PublishError::AuthError(anyhow::anyhow!("Invalid password.")))?;
-
-    Ok(user_id)
+        .map_err(|_| PublishError::AuthError(anyhow::anyhow!("Invalid password.")))
 }
 
 #[derive(thiserror::Error)]
