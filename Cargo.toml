@@ -40,6 +40,7 @@ thiserror = "1"
 anyhow = "1"
 base64 = "0.22"
 sha3 = "0.10"
+argon2 = "0.5"
 
 [dependencies.sqlx]
 version = "0.8"
