@@ -7,7 +7,7 @@ use actix_web::{
     web,
 };
 use anyhow::Context;
-use argon2::{Algorithm, Argon2, Params, PasswordHasher, Version, password_hash::SaltString};
+use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use base64::{Engine, engine::general_purpose};
 use secrecy::{ExposeSecret, Secret};
 use sqlx::PgPool;
@@ -143,17 +143,10 @@ async fn validate_credentials(
     credentials: Credentials,
     pool: &PgPool,
 ) -> Result<uuid::Uuid, PublishError> {
-    let hasher = Argon2::new(
-        Algorithm::Argon2id,
-        Version::V0x13,
-        Params::new(15000, 2, 1, None).map_err(|_| {
-            PublishError::UnexpectedError(anyhow::anyhow!("Failed to build Argon2 parameters"))
-        })?,
-    );
-
+    // Get stored PHC password for the user
     let row = sqlx::query!(
         r#"
-        SELECT user_id, password_hash, salt
+        SELECT user_id, password_hash
         FROM users WHERE username = $1
         "#,
         credentials.username,
@@ -163,8 +156,8 @@ async fn validate_credentials(
     .context("Failed to perform a query to retrieve stored credentials.")
     .map_err(PublishError::UnexpectedError)?;
 
-    let (expected_password_hash, user_id, salt) = match row {
-        Some(row) => (row.password_hash, row.user_id, row.salt),
+    let (expected_password_hash, user_id) = match row {
+        Some(row) => (row.password_hash, row.user_id),
         None => {
             return Err(PublishError::AuthError(anyhow::anyhow!(
                 "Unknown username."
@@ -172,20 +165,21 @@ async fn validate_credentials(
         }
     };
 
-    let password_hash = hasher
-        .hash_password(credentials.password.expose_secret().as_bytes(), &salt)
-        .map_err(|_| PublishError::UnexpectedError(anyhow::anyhow!("Failed to hash password")))?;
+    let expected_password_hash = PasswordHash::new(&expected_password_hash).map_err(|_| {
+        PublishError::UnexpectedError(anyhow::anyhow!(
+            "Failed to parse hash in PHC string format."
+        ))
+    })?;
 
-    // lowercase hexadecimal encoding
-    let password_hash = format!("{:x}", password_hash.hash.unwrap());
+    // auto verifies load params and salt used to verify password, we don't have to store salt and other load params for argon2
+    Argon2::default()
+        .verify_password(
+            credentials.password.expose_secret().as_bytes(),
+            &expected_password_hash,
+        )
+        .map_err(|_| PublishError::AuthError(anyhow::anyhow!("Invalid password.")))?;
 
-    if password_hash != expected_password_hash {
-        Err(PublishError::AuthError(anyhow::anyhow!(
-            "Invalid password."
-        )))
-    } else {
-        Ok(user_id)
-    }
+    Ok(user_id)
 }
 
 #[derive(thiserror::Error)]
