@@ -34,7 +34,6 @@ serde-aux = "4"
 unicode-segmentation = "1"
 claim = "0.5"
 validator = "0.2"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 rand = { version = "0.8", features=["std_rng"] }
 thiserror = "1"
 anyhow = "1"
@@ -45,6 +44,11 @@ htmlescape = "0.3"
 hmac = { version = "0.12", features = ["std"] }
 sha2 = "0.10"
 hex = "0.4"
+
+[dependencies.reqwest]
+version = "0.12"
+default-features = false
+features = ["json", "rustls-tls", "cookies"]
 
 [dependencies.sqlx]
 version = "0.8"

@@ -3,6 +3,7 @@ mod helpers;
 mod subscriptions;
 mod subscriptions_confirm;
 
+mod login;
 mod newsletter;
 
 // structuring test as single test executable with scoped submodules for each test.
