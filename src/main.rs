@@ -3,7 +3,7 @@ use newsletter::startup::Application;
 use newsletter::telemetry::{get_subscriber, init_subscriber};
 
 #[tokio::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> anyhow::Result<()> {
     // tracing/telemetry setup
     let subscriber = get_subscriber("newsletter".into(), "info".into(), std::io::stdout);
     init_subscriber(subscriber);
