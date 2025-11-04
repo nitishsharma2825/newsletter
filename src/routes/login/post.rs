@@ -1,4 +1,3 @@
-use actix_session::Session;
 use actix_web::{HttpResponse, error::InternalError, http::header::LOCATION, web};
 use actix_web_flash_messages::FlashMessage;
 use secrecy::Secret;
@@ -7,6 +6,7 @@ use sqlx::PgPool;
 use crate::{
     authentication::{AuthError, Credentials, validate_credentials},
     routes::error_chain_fmt,
+    session_state::TypedSession,
 };
 
 #[derive(serde::Deserialize)]
@@ -27,7 +27,7 @@ pub async fn login(
         if it finds one, it loads the corresponding session state from the chosen storage backend eg: Redis
         else it creates a new empty session state
     */
-    session: Session,
+    session: TypedSession,
 ) -> Result<HttpResponse, InternalError<LoginError>> {
     let credentials = Credentials {
         username: form.0.username,
@@ -40,7 +40,7 @@ pub async fn login(
             tracing::Span::current().record("user_id", tracing::field::display(&user_id));
             session.renew(); // creates a new session key and map existing state to it
             session
-                .insert("user_id", user_id)
+                .insert_user_id(user_id)
                 .map_err(|e| login_redirect(LoginError::UnexpectedError(e.into())))?;
             Ok(HttpResponse::SeeOther()
                 .insert_header((LOCATION, "/admin/dashboard"))
