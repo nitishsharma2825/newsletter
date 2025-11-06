@@ -4,9 +4,8 @@ use secrecy::{ExposeSecret, Secret};
 use sqlx::PgPool;
 
 use crate::{
-    authentication::{AuthError, Credentials, validate_credentials},
+    authentication::{AuthError, Credentials, UserId, validate_credentials},
     routes::admin::dashboard::get_username,
-    session_state::TypedSession,
     utils::{e500, see_other},
 };
 
@@ -19,16 +18,11 @@ pub struct FormData {
 
 pub async fn change_password(
     form: web::Form<FormData>,
-    session: TypedSession,
+    user_id: web::ReqData<UserId>,
     pool: web::Data<PgPool>,
 ) -> Result<HttpResponse, actix_web::Error> {
-    let user_id = session.get_user_id().map_err(e500)?;
-
     // user should be authenticated, in redis, we must have a user_id for token
-    if user_id.is_none() {
-        return Ok(see_other("/login"));
-    }
-    let user_id = user_id.unwrap();
+    let user_id = user_id.into_inner();
 
     // new password and confirm new passwords should match
     let new_password = form.new_password.expose_secret();
@@ -46,7 +40,7 @@ pub async fn change_password(
         return Ok(see_other("/admin/password"));
     }
 
-    let username = get_username(user_id, &pool).await.map_err(e500)?;
+    let username = get_username(*user_id, &pool).await.map_err(e500)?;
     let credentials = Credentials {
         username,
         password: form.0.current_password,
@@ -62,7 +56,7 @@ pub async fn change_password(
         };
     }
 
-    crate::authentication::change_password(user_id, form.0.new_password, &pool)
+    crate::authentication::change_password(*user_id, form.0.new_password, &pool)
         .await
         .map_err(e500)?;
     FlashMessage::error("Your password has been changed.").send();
