@@ -7,7 +7,8 @@ use crate::{
     authentication::UserId,
     domain::SubscriberEmail,
     email_client::EmailClient,
-    utils::{e500, see_other},
+    idempotency::IdempotencyKey,
+    utils::{e400, e500, see_other},
 };
 
 #[derive(serde::Deserialize)]
@@ -15,6 +16,7 @@ pub struct FormData {
     title: String,
     text_content: String,
     html_content: String,
+    idempotency_key: String,
 }
 
 #[tracing::instrument(
@@ -28,19 +30,21 @@ pub async fn publish_newsletters(
     pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
 ) -> Result<HttpResponse, actix_web::Error> {
+    let FormData {
+        title,
+        text_content,
+        html_content,
+        idempotency_key,
+    } = form.0;
+    let idempotency_key: IdempotencyKey = idempotency_key.try_into().map_err(e400)?;
+
     // get all confirmed subscribers email from the database
     let subscribers = get_confirmed_subscribers(&pool).await.map_err(e500)?;
-
     for subscriber in subscribers {
         match subscriber {
             Ok(subscriber) => {
                 email_client
-                    .send_email(
-                        &subscriber.email,
-                        &form.title,
-                        &form.text_content,
-                        &form.html_content,
-                    )
+                    .send_email(&subscriber.email, &title, &text_content, &html_content)
                     .await
                     .with_context(|| {
                         format!("Failed to send newsletter issue to {}", subscriber.email)
