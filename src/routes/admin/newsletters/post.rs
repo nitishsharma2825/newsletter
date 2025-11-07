@@ -7,7 +7,7 @@ use crate::{
     authentication::UserId,
     domain::SubscriberEmail,
     email_client::EmailClient,
-    idempotency::{IdempotencyKey, get_saved_response, save_response},
+    idempotency::{IdempotencyKey, NextAction, save_response, try_processing},
     utils::{e400, e500, see_other},
 };
 
@@ -39,12 +39,15 @@ pub async fn publish_newsletters(
     } = form.0;
 
     let idempotency_key: IdempotencyKey = idempotency_key.try_into().map_err(e400)?;
-
-    if let Some(saved_response) = get_saved_response(&pool, &idempotency_key, *user_id)
+    match try_processing(&pool, &idempotency_key, *user_id)
         .await
         .map_err(e500)?
     {
-        return Ok(saved_response);
+        NextAction::StartProcessing => {}
+        NextAction::ReturnSavedResponse(saved_response) => {
+            success_message().send();
+            return Ok(saved_response);
+        }
     }
 
     // get all confirmed subscribers email from the database
@@ -68,7 +71,7 @@ pub async fn publish_newsletters(
         }
     }
 
-    FlashMessage::info("The newsletter issue has been published!").send();
+    success_message().send();
     let response = see_other("/admin/newsletters");
     let response = save_response(&pool, &idempotency_key, *user_id, response)
         .await
@@ -99,4 +102,8 @@ async fn get_confirmed_subscribers(
     .collect();
 
     Ok(confirmed_subscribers)
+}
+
+fn success_message() -> FlashMessage {
+    FlashMessage::info("The newsletter issue has been published!")
 }
