@@ -5,6 +5,9 @@ use argon2::PasswordHasher;
 use argon2::Version;
 use argon2::password_hash::SaltString;
 use newsletter::configuration::{DatabaseSettings, get_configuration};
+use newsletter::email_client::EmailClient;
+use newsletter::issue_delivery_worker::ExecutionOutcome;
+use newsletter::issue_delivery_worker::try_execute_task;
 use newsletter::startup::{Application, get_connection_pool};
 use newsletter::telemetry::{get_subscriber, init_subscriber};
 use once_cell::sync::Lazy;
@@ -32,6 +35,7 @@ pub struct TestApp {
     pub email_server: MockServer,
     pub test_user: TestUser,
     pub api_client: reqwest::Client,
+    pub email_client: EmailClient,
 }
 
 pub struct TestUser {
@@ -167,6 +171,18 @@ impl TestApp {
             .await
             .expect("Failed to execute request.")
     }
+
+    pub async fn dispatch_all_pending_emails(&self) {
+        loop {
+            if let ExecutionOutcome::EmptyQueue =
+                try_execute_task(&self.db_pool, &self.email_client)
+                    .await
+                    .unwrap()
+            {
+                break;
+            }
+        }
+    }
 }
 
 impl TestUser {
@@ -250,6 +266,7 @@ pub async fn spawn_app() -> TestApp {
         email_server,
         test_user: TestUser::generate(),
         api_client: client,
+        email_client: configuration.email_client.client(),
     };
 
     test_app.test_user.store(&test_app.db_pool).await;

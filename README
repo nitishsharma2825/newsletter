@@ -59,3 +59,8 @@ az ad sp create-for-rbac --name newsletter-app-creds --role contributor --scopes
 
 # Grant AcrPush role to your service principal [Needed to push docker image to ACR]
 az role assignment create --assignee <service-principal-id> --scope /subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.ContainerRegistry/registries/<registry-name> --role AcrPush
+
+
+TODOS:
+- Background worker for expiring idempotency keys
+- modify queue table in PG to contain num_retries, execute_after, delivery_status fields
