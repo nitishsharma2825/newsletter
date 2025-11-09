@@ -6,6 +6,8 @@ use argon2::Version;
 use argon2::password_hash::SaltString;
 use newsletter::configuration::{DatabaseSettings, get_configuration};
 use newsletter::email_client::EmailClient;
+use newsletter::idempotency_cleaner_worker::IdempotentExecutionOutcome;
+use newsletter::idempotency_cleaner_worker::delete_expired_idempotent_entries;
 use newsletter::issue_delivery_worker::ExecutionOutcome;
 use newsletter::issue_delivery_worker::try_execute_task;
 use newsletter::startup::{Application, get_connection_pool};
@@ -176,6 +178,18 @@ impl TestApp {
         loop {
             if let ExecutionOutcome::EmptyQueue =
                 try_execute_task(&self.db_pool, &self.email_client)
+                    .await
+                    .unwrap()
+            {
+                break;
+            }
+        }
+    }
+
+    pub async fn clean_all_expired_idempotent_entries(&self) {
+        loop {
+            if let IdempotentExecutionOutcome::EmptyTable =
+                delete_expired_idempotent_entries(&self.db_pool, 1.into())
                     .await
                     .unwrap()
             {

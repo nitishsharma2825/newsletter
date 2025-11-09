@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM idempotency\n        WHERE idempotency_key = ANY($1)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5d70be4ed37fe63038f48f081035ac54cfed155afe300b176e02fab0ec595415"
+}

@@ -1,6 +1,7 @@
 use std::fmt::{Debug, Display};
 
 use newsletter::configuration::get_configuration;
+use newsletter::idempotency_cleaner_worker::run_idempotency_worker_until_stopped;
 use newsletter::issue_delivery_worker::run_worker_until_stopped;
 use newsletter::startup::Application;
 use newsletter::telemetry::{get_subscriber, init_subscriber};
@@ -20,7 +21,9 @@ async fn main() -> anyhow::Result<()> {
     let application_task = tokio::spawn(application.run_until_stopped());
 
     // worker task
-    let worker_task = tokio::spawn(run_worker_until_stopped(configuration));
+    let worker_task = tokio::spawn(run_worker_until_stopped(configuration.clone()));
+    let idempotency_cleaner_task =
+        tokio::spawn(run_idempotency_worker_until_stopped(configuration));
 
     // All selected futures are polled on same task, concurrency not parallel.
     // Both run on the same thread, if one branch blocks the thread, all other expressions will be unable to continue
@@ -28,6 +31,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::select! {
         o = application_task => report_exit("API", o),
         o = worker_task => report_exit("Background worker", o),
+        o = idempotency_cleaner_task => report_exit("Idempotency worker", o),
     };
 
     Ok(())

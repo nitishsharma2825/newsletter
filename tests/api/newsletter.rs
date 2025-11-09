@@ -1,9 +1,8 @@
-use std::time::Duration;
-
 use fake::{
     Fake,
     faker::{internet::en::SafeEmail, name::en::Name},
 };
+use tokio::time::{Duration, sleep};
 use wiremock::{
     Mock, ResponseTemplate,
     matchers::{any, method, path},
@@ -200,5 +199,47 @@ async fn concurrent_form_submission_is_handled_gracefully() {
         response1.text().await.unwrap(),
         response2.text().await.unwrap()
     );
+    app.dispatch_all_pending_emails().await;
+}
+
+#[tokio::test]
+async fn newsletter_issues_resubmit_after_idempotent_time_interval() {
+    let app = spawn_app().await;
+    create_confirmed_susbcriber(&app).await;
+    app.test_user.login(&app).await;
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(2) // No request is fired at postmark
+        .mount(&app.email_server)
+        .await;
+
+    let newsletter_request_body = serde_json::json!({
+        "title": "Newsletter title",
+        "text_content": "Newsletter body as plain text",
+        "html_content": "<p>Newsletter body as HTML</p>",
+        "idempotency_key": uuid::Uuid::new_v4().to_string(),
+    });
+    let response = app.post_publish_newsletter(&newsletter_request_body).await;
+    assert_is_redirect_to(&response, "/admin/newsletters");
+
+    let html_page = app.get_publish_newsletter_html().await;
+    assert!(html_page.contains(
+        "<p><i>The newsletter issue has been accepted - emails will go out shortly.</i></p>"
+    ));
+    app.dispatch_all_pending_emails().await;
+
+    sleep(Duration::from_secs(2)).await;
+    app.clean_all_expired_idempotent_entries().await;
+
+    // Submit newsletter form again
+    let response = app.post_publish_newsletter(&newsletter_request_body).await;
+    assert_is_redirect_to(&response, "/admin/newsletters");
+
+    let html_page = app.get_publish_newsletter_html().await;
+    assert!(html_page.contains(
+        "<p><i>The newsletter issue has been accepted - emails will go out shortly.</i></p>"
+    ));
     app.dispatch_all_pending_emails().await;
 }

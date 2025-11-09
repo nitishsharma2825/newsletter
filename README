@@ -62,5 +62,5 @@ az role assignment create --assignee <service-principal-id> --scope /subscriptio
 
 
 TODOS:
-- Background worker for expiring idempotency keys
+- Background worker for expiring idempotency keys: Done
 - modify queue table in PG to contain num_retries, execute_after, delivery_status fields

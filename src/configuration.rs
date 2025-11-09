@@ -10,6 +10,7 @@ pub struct Settings {
     pub application: ApplicationSettings,
     pub email_client: EmailClientSettings,
     pub redis_uri: Secret<String>,
+    pub idempotent_time_interval: f64,
 }
 
 #[derive(Clone, serde::Deserialize)]
